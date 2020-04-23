@@ -1,10 +1,11 @@
-///! The implemenation follows the description of the format outlined at
-///! <https://www.cgl.ucsf.edu/home/sparky/manual/files.html#UCSFFormat>
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
 use nom::number::complete::{be_f32, be_u16, be_u32, be_u8};
 use nom::sequence::tuple;
 use nom::IResult;
+///! The implemenation follows the description of the format outlined at
+///! <https://www.cgl.ucsf.edu/home/sparky/manual/files.html#UCSFFormat>
+use std::convert::TryInto;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -21,7 +22,7 @@ pub enum UcsfError {
 pub struct UcsfFile {
     pub header: Header,
     pub axis_headers: Vec<AxisHeader>,
-    pub data: Vec<u8>,
+    pub data: Vec<f32>,
 }
 
 impl UcsfFile {
@@ -49,15 +50,39 @@ impl UcsfFile {
 
         let data_size = Self::calculate_data_size(&axis_headers);
         let (rem, data) = Self::parse_data_raw(rem, data_size).map_err(|_| UcsfError::Parsing)?;
+        let float_data: Vec<f32> = data
+            .chunks(4)
+            .map(|chunk| f32::from_be_bytes(chunk.try_into().unwrap()))
+            .collect();
 
         Ok((
             rem,
             Self {
                 header,
                 axis_headers,
-                data: data.to_vec(),
+                data: float_data,
             },
         ))
+    }
+
+    /// Returns the amount of data points along `axis`.
+    pub fn axis_data_points(&self, axis: usize) -> u32 {
+        self.axis_headers[axis].data_points
+    }
+
+    /// Returns the amount of tiles along axis `axis`.
+    pub fn axis_tiles(&self, axis: usize) -> u32 {
+        self.axis_headers[axis].num_tiles()
+    }
+
+    /// Returns the amount of data points in a tile along `axis`.
+    pub fn axis_tile_size(&self, axis: usize) -> u32 {
+        self.axis_headers[axis].tile_size
+    }
+
+    /// Returns an iterator over all tiles in the file.
+    pub fn tiles(&self) -> Tiles<'_> {
+        Tiles::for_file(&self)
     }
 }
 
@@ -232,5 +257,115 @@ impl AxisHeader {
         };
 
         map(res)
+    }
+
+    /// Returns the amount of tiles along this axis.
+    pub fn num_tiles(&self) -> u32 {
+        self.data_points / self.tile_size
+    }
+}
+
+pub struct Tile<'a> {
+    /// Amount of data points along axis 1 in this tile.
+    pub axis_1_len: usize,
+    /// Amount of data points along axis 2 in this tile.
+    pub axis_2_len: usize,
+    /// Index of first element of axis 1 (in relation to total axis).
+    pub axis_1_start: usize,
+    /// Index of first element of axis 2 (in relation to total axis).
+    pub axis_2_start: usize,
+    /// View into underlying data
+    pub data: &'a [f32],
+}
+
+impl<'a> Tile<'a> {
+    pub fn data(&self) -> &[f32] {
+        &self.data
+    }
+
+    /// Iterate over the values in a tile with their absolute position in the spectrum.
+    ///
+    /// **No specific order of the values should be assumes, which is why the position is provided
+    /// in the iterator**
+    pub fn iter_with_abolute_pos(&self) -> AbsolutePosValIter<'_> {
+        AbsolutePosValIter {
+            tile: self,
+            next_index: 0,
+        }
+    }
+}
+
+pub struct AbsolutePosValIter<'a> {
+    tile: &'a Tile<'a>,
+    next_index: usize,
+}
+
+impl<'a> Iterator for AbsolutePosValIter<'a> {
+    type Item = ((usize, usize), f32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index >= self.tile.data().len() {
+            return None;
+        }
+
+        let axis_1_rel = self.next_index / self.tile.axis_2_len;
+        let axis_2_rel = self.next_index % self.tile.axis_2_len;
+
+        let axis_1_abs = axis_1_rel + self.tile.axis_1_start;
+        let axis_2_abs = axis_2_rel + self.tile.axis_2_start;
+
+        let val = self.tile.data()[self.next_index];
+        self.next_index += 1;
+        Some(((axis_1_abs, axis_2_abs), val))
+    }
+}
+
+pub struct Tiles<'a> {
+    next_index: usize,
+    file: &'a UcsfFile,
+}
+
+impl<'a> Tiles<'a> {
+    pub fn for_file(file: &'a UcsfFile) -> Self {
+        Self {
+            next_index: 0,
+            file,
+        }
+    }
+}
+
+impl<'a> Iterator for Tiles<'a> {
+    type Item = Tile<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let tiles_axis_1 = self.file.axis_tiles(0) as usize;
+        let tiles_axis_2 = self.file.axis_tiles(1) as usize;
+        let tiles_total = tiles_axis_1 * tiles_axis_2;
+        if tiles_total <= self.next_index {
+            return None;
+        }
+
+        let tile_index_1 = self.next_index / tiles_axis_2;
+        let tile_index_2 = self.next_index % tiles_axis_2;
+
+        let axis_1_len = self.file.axis_tile_size(0) as usize;
+        let axis_2_len = self.file.axis_tile_size(1) as usize;
+
+        let axis_1_start = axis_1_len * tile_index_1;
+        let axis_2_start = axis_2_len * tile_index_2;
+
+        let tile_data_points = axis_1_len * axis_2_len;
+
+        let data_range_start = tile_data_points * self.next_index;
+        let data_range_end = data_range_start + tile_data_points;
+
+        self.next_index += 1;
+        Some(Tile {
+            axis_1_len,
+            axis_2_len,
+            axis_1_start,
+            axis_2_start,
+            data: &self.file.data[data_range_start..data_range_end],
+        })
     }
 }
