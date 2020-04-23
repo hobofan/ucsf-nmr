@@ -1,15 +1,15 @@
 [package]
 name = "ucsf"
+description = "Parser for ther UCSF NMR file format"
 version = "0.1.0"
 authors = ["Maximilian Goisser <goisser94@gmail.com>"]
+license = "MIT OR Apache-2.0"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["nmr", "spectum", "format", "ucsf", "parser"]
 
 [dependencies]
 nom = "5.1.1"
 thiserror = "1.0.15"
-anyhow = "1.0.28"
 
 [dev-dependencies]
 float_eq = "0.2.0"
