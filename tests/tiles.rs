@@ -1,4 +1,4 @@
-use ucsf::UcsfFile;
+use ucsf_nmr::UcsfFile;
 
 #[test]
 fn correct_num_tiles() {

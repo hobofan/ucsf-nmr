@@ -4,7 +4,7 @@ use palette::{
     Gradient,
 };
 use plotters::prelude::*;
-use ucsf::UcsfFile;
+use ucsf_nmr::UcsfFile;
 
 pub fn main() {
     let contents = include_bytes!("../tests/data/15n_hsqc.ucsf");

@@ -1,6 +1,6 @@
 use float_eq::assert_float_eq;
 
-use ucsf::{AxisHeader, Header, UcsfError, UcsfFile};
+use ucsf_nmr::{AxisHeader, Header, UcsfError, UcsfFile};
 
 #[test]
 fn parse_file() {
