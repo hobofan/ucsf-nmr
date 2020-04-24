@@ -1,4 +1,5 @@
 use float_eq::assert_float_eq;
+use insta::assert_debug_snapshot;
 
 use ucsf_nmr::{AxisHeader, Header, UcsfError, UcsfFile};
 
@@ -64,4 +65,13 @@ fn parse_axis_header_2() {
     assert_float_eq!(header.frequency, 600.283f32, ulps <= 1);
     assert_float_eq!(header.spectral_width, 3305.2886f32, ulps <= 1);
     assert_float_eq!(header.center, 8.244598f32, ulps <= 1);
+}
+
+#[test]
+fn data_continous() {
+    let contents = include_bytes!("./data/15n_hsqc.ucsf");
+
+    let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    let value = file.data_continous();
+    assert_debug_snapshot!(value);
 }
