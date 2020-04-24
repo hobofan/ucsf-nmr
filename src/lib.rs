@@ -17,7 +17,7 @@
 //! }
 //! ```
 //!
-//! Iterate over all data points in the file:
+//! Iterate over all data points in the file via tiles:
 //! ```
 //! # use std::fs;
 //! # use ucsf_nmr::UcsfFile;
@@ -121,6 +121,44 @@ impl UcsfFile {
     /// Returns an iterator over all tiles in the file.
     pub fn tiles(&self) -> Tiles<'_> {
         Tiles::for_file(&self)
+    }
+
+    /// Returns the sizes for all axis.
+    ///
+    /// Can be used together with `.data_continous()` to use the data
+    /// with multidimensional array types from other crates.
+    pub fn axis_sizes(&self) -> Vec<usize> {
+        self.axis_headers
+            .iter()
+            .map(|axis| axis.data_points as usize)
+            .collect()
+    }
+
+    /// Construct a Vec where the data is layed out continously per-axis.
+    ///
+    /// This provides an alternative way to accessing the data in its native
+    /// tile-layout.
+    pub fn data_continous(&self) -> Vec<f32> {
+        let total_size = self.data.len();
+        let mut data = [0f32].repeat(total_size);
+
+        for tile in self.tiles() {
+            for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos() {
+                let pos = i_axis_1 * (self.axis_data_points(1) as usize) + i_axis_2;
+                data[pos] = value;
+            }
+        }
+        data
+    }
+
+    /// Returns the lower and upper bounds of the data.
+    pub fn bounds(&self) -> (f32, f32) {
+        let mut sorted_data = self.data.to_vec();
+        sorted_data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let min_val: f32 = *sorted_data.first().unwrap();
+        let max_val: f32 = *sorted_data.last().unwrap();
+
+        (min_val, max_val)
     }
 }
 
