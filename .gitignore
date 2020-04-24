@@ -3,3 +3,4 @@
 Cargo.lock
 
 examples/output/*
+!examples/output/all_tiles.png

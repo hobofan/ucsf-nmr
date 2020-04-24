@@ -29,7 +29,9 @@ cargo add ucsf_nmr
 ## Usage examples
 
 The example under [./examples/tile_plots.rs](./examples/tile_plots.rs) shows how to load a spectrum,
-iterate over all the data points in it and draw a simple greyscale image from it.
+iterate over all the data points in it and draw a simple greyscale image from it with the help of [plotters](https://crates.io/crates/plotters):
+
+![Image of NMR spectrum](./examples/output/all_tiles.png)
 
 #### License
 
