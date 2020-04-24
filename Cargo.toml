@@ -1,12 +1,13 @@
 [package]
 name = "ucsf_nmr"
 description = "Parser for ther UCSF NMR file format"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Maximilian Goisser <goisser94@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"
 keywords = ["nmr", "spectum", "format", "ucsf", "parser"]
 repository = "https://github.com/hobofan/ucsf-nmr"
+readme = "README.md"
 
 [dependencies]
 nom = "5.1.1"

@@ -1,10 +1,48 @@
+//! The implemenation follows the description of the format outlined at
+//! <https://www.cgl.ucsf.edu/home/sparky/manual/files.html#UCSFFormat>
+//!
+//! ## Usage
+//!
+//! Reading a spectrum from a file:
+//! ```
+//! use std::fs;
+//! use ucsf_nmr::UcsfFile;
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
+//!    let file_bytes = fs::read("./tests/data/15n_hsqc.ucsf")?;
+//!    // _remaining_bytes should be empty and can usually be discarded.
+//!    // ucsf_file contains our data of interest
+//!    let (_remaining_bytes, ucsf_file) = UcsfFile::parse(&file_bytes)?;
+//!    Ok(())
+//! }
+//! ```
+//!
+//! Iterate over all data points in the file:
+//! ```
+//! # use std::fs;
+//! # use ucsf_nmr::UcsfFile;
+//! #
+//! # fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
+//! #   let file_bytes = fs::read("./tests/data/15n_hsqc.ucsf")?;
+//! #   let (_remaining_bytes, ucsf_file) = UcsfFile::parse(&file_bytes)?;
+//! #
+//!   for tile in ucsf_file.tiles() {
+//!     for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos() {
+//!       // i_axis_1 contains coordinate of data point on first axis
+//!       // i_axis_2 contains coordinate of data point on first axis
+//!       // value contains coordinate of data point on first axis
+//!       format!("({},{}) : {}", i_axis_1, i_axis_2, value);
+//!     }
+//!   }
+//! #
+//! #   Ok(())
+//! # }
+//! ```
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take;
 use nom::number::complete::{be_f32, be_u16, be_u32, be_u8};
 use nom::sequence::tuple;
 use nom::IResult;
-///! The implemenation follows the description of the format outlined at
-///! <https://www.cgl.ucsf.edu/home/sparky/manual/files.html#UCSFFormat>
 use std::convert::TryInto;
 use thiserror::Error;
 
