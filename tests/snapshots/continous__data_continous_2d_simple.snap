@@ -1,5 +1,5 @@
 ---
-source: tests/parsing.rs
+source: tests/continous.rs
 expression: value
 ---
 [

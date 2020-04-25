@@ -139,7 +139,7 @@ impl UcsfFile {
     /// This provides an alternative way to accessing the data in its native
     /// tile-layout.
     pub fn data_continous(&self) -> Vec<f32> {
-        let total_size = self.data.len();
+        let total_size = Self::calculate_data_size(&self.axis_headers);
         let mut data = [0f32].repeat(total_size);
 
         for tile in self.tiles() {
@@ -348,9 +348,28 @@ impl AxisHeader {
     pub fn padded_size(&self) -> u32 {
         self.num_tiles() * self.tile_size
     }
+
+    /// Check whether the tile with index `tile_n` has padding along this axis.
+    pub fn tile_is_padded(&self, tile_n: usize) -> bool {
+        let num_full_tiles = self.data_points / self.tile_size;
+
+        tile_n >= num_full_tiles as usize
+    }
+
+    /// Returns the amount of padding for tile with index `tile_n` along this axis.
+    pub fn tile_padding(&self, tile_n: usize) -> u32 {
+        match self.tile_is_padded(tile_n) {
+            false => 0,
+            true => self.padded_size() - self.data_points,
+        }
+    }
 }
 
 pub struct Tile<'a> {
+    /// Amount of data points along axis 1 in a full (unpadded) tile.
+    pub normal_axis_1_len: usize,
+    /// Amount of data points along axis 2 in a full (unpadded) tile.
+    pub normal_axis_2_len: usize,
     /// Amount of data points along axis 1 in this tile.
     pub axis_1_len: usize,
     /// Amount of data points along axis 2 in this tile.
@@ -433,21 +452,31 @@ impl<'a> Iterator for Tiles<'a> {
         let tile_index_1 = self.next_index / tiles_axis_2;
         let tile_index_2 = self.next_index % tiles_axis_2;
 
+        // Size of a normal (unpadded) tile
         let axis_1_len = self.file.axis_tile_size(0) as usize;
         let axis_2_len = self.file.axis_tile_size(1) as usize;
+        // Size of this tile (without padding)
+        let this_tile_axis_1_len = (self.file.axis_tile_size(0)
+            - self.file.axis_headers[0].tile_padding(tile_index_1))
+            as usize;
+        let this_tile_axis_2_len = (self.file.axis_tile_size(1)
+            - self.file.axis_headers[1].tile_padding(tile_index_2))
+            as usize;
 
         let axis_1_start = axis_1_len * tile_index_1;
         let axis_2_start = axis_2_len * tile_index_2;
 
-        let tile_data_points = axis_1_len * axis_2_len;
+        let tile_data_points = this_tile_axis_1_len * this_tile_axis_2_len;
 
         let data_range_start = tile_data_points * self.next_index;
         let data_range_end = data_range_start + tile_data_points;
 
         self.next_index += 1;
         Some(Tile {
-            axis_1_len,
-            axis_2_len,
+            normal_axis_1_len: axis_1_len,
+            normal_axis_2_len: axis_2_len,
+            axis_1_len: this_tile_axis_1_len,
+            axis_2_len: this_tile_axis_2_len,
             axis_1_start,
             axis_2_start,
             data: &self.file.data[data_range_start..data_range_end],
