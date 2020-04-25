@@ -12,8 +12,33 @@ fn parse_file() {
 }
 
 #[test]
+// #[ignore] // TODO: fix by handling 0 padding on sides
+fn parse_file_2() {
+    let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
+
+    let (rem, _) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(rem.len(), 0);
+}
+
+#[test]
 fn parse_header() {
     let contents = include_bytes!("./data/15n_hsqc.ucsf");
+
+    let (_, header) = Header::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(
+        Header {
+            dimensions: 2,
+            components: 1,
+            format_version: 2,
+            remainder: contents[14..180].to_vec()
+        },
+        header
+    );
+}
+
+#[test]
+fn parse_header_2() {
+    let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
 
     let (_, header) = Header::parse(&contents[..]).expect("Failed parsing");
     assert_eq!(
@@ -65,6 +90,42 @@ fn parse_axis_header_2() {
     assert_float_eq!(header.frequency, 600.283f32, ulps <= 1);
     assert_float_eq!(header.spectral_width, 3305.2886f32, ulps <= 1);
     assert_float_eq!(header.center, 8.244598f32, ulps <= 1);
+}
+
+#[test]
+fn correct_dimensions() {
+    let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
+
+    let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(file.axis_data_points(0), 512);
+    assert_eq!(file.axis_data_points(1), 257);
+}
+
+#[test]
+fn correct_tile_sizes() {
+    let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
+
+    let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(file.axis_tile_size(0), 128);
+    assert_eq!(file.axis_tile_size(1), 64);
+}
+
+#[test]
+fn correct_number_of_tiles() {
+    let contents = include_bytes!("./data/15n_hsqc.ucsf");
+
+    let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(file.axis_tiles(0), 2);
+    assert_eq!(file.axis_tiles(1), 2);
+}
+
+#[test]
+fn correct_number_of_tiles_2() {
+    let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
+
+    let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
+    assert_eq!(file.axis_tiles(0), 4);
+    assert_eq!(file.axis_tiles(1), 5);
 }
 
 #[test]

@@ -68,7 +68,7 @@ impl UcsfFile {
         // * 4 as each data point is a f32
         axis_headers
             .iter()
-            .map(|axis| axis.data_points as usize)
+            .map(|axis| axis.padded_size() as usize)
             .product::<usize>()
             * 4
     }
@@ -337,7 +337,16 @@ impl AxisHeader {
 
     /// Returns the amount of tiles along this axis.
     pub fn num_tiles(&self) -> u32 {
-        self.data_points / self.tile_size
+        // We are adding `self.tile_size - 1`, to ensure we always round up
+        // for zero-padded tiles
+        (self.data_points + self.tile_size - 1) / self.tile_size
+    }
+
+    /// Returns the size of the axis including zero-padding.
+    ///
+    /// Useful for determining the expected size of the file.
+    pub fn padded_size(&self) -> u32 {
+        self.num_tiles() * self.tile_size
     }
 }
 
