@@ -7,8 +7,8 @@ fn correct_axis_tiles_1() {
     let contents = include_bytes!("./data/15n_hsqc.ucsf");
 
     let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
-    assert_eq!(file.axis_tiles(0), 2);
-    assert_eq!(file.axis_tiles(1), 2);
+    assert_eq!(file.axis_tiles()[0], 2);
+    assert_eq!(file.axis_tiles()[1], 2);
 }
 
 #[test]
@@ -16,8 +16,8 @@ fn correct_axis_tiles_padded() {
     let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
 
     let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
-    assert_eq!(file.axis_tiles(0), 4);
-    assert_eq!(file.axis_tiles(1), 5);
+    assert_eq!(file.axis_tiles()[0], 4);
+    assert_eq!(file.axis_tiles()[1], 5);
 }
 
 #[test]
@@ -78,6 +78,7 @@ fn correct_tiles_absolute_positions() {
                 .next()
                 .unwrap()
                 .iter_with_abolute_pos()
+                .as_2d()
                 .next()
                 .unwrap()
                 .0
@@ -111,7 +112,7 @@ fn correct_tiles_absolute_positions() {
         |tiles: &mut Tiles, range_axis_1: Range<_>, range_axis_2: Range<_>| {
             let tile = tiles.next().unwrap();
 
-            for (pos, _) in tile.iter_with_abolute_pos() {
+            for (pos, _) in tile.iter_with_abolute_pos().as_2d() {
                 assert!(range_axis_1.contains(&pos.0));
                 assert!(range_axis_2.contains(&pos.1));
             }
@@ -133,7 +134,7 @@ fn correct_tiles_padding() {
 
     let assert_absolute_pos = |tiles: &mut Tiles, padding| {
         let tile = tiles.next().unwrap();
-        let tile_padding = (tile.axis_1_len, tile.axis_2_len);
+        let tile_padding = (tile.axis_lengths[0], tile.axis_lengths[1]);
         assert_eq!(padding, tile_padding);
     };
 

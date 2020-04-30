@@ -27,7 +27,7 @@
 //! #   let (_remaining_bytes, ucsf_file) = UcsfFile::parse(&file_bytes)?;
 //! #
 //!   for tile in ucsf_file.tiles() {
-//!     for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos() {
+//!     for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos().as_2d() {
 //!       // i_axis_1 contains coordinate of data point on first axis
 //!       // i_axis_2 contains coordinate of data point on first axis
 //!       // value contains coordinate of data point on first axis
@@ -108,19 +108,25 @@ impl UcsfFile {
         self.axis_headers[axis].data_points
     }
 
-    /// Returns the amount of tiles along axis `axis`.
-    pub fn axis_tiles(&self, axis: usize) -> u32 {
-        self.axis_headers[axis].num_tiles()
-    }
-
-    /// Returns the amount of data points in a tile along `axis`.
-    pub fn axis_tile_size(&self, axis: usize) -> u32 {
-        self.axis_headers[axis].tile_size
-    }
-
     /// Returns an iterator over all tiles in the file.
     pub fn tiles(&self) -> Tiles<'_> {
         Tiles::for_file(&self)
+    }
+
+    /// Returns the amount of tiles along each axis.
+    pub fn axis_tiles(&self) -> Vec<usize> {
+        self.axis_headers
+            .iter()
+            .map(|axis| axis.num_tiles() as usize)
+            .collect()
+    }
+
+    /// Returns the amount of data points in a tile along all axis.
+    pub fn axis_tile_sizes(&self) -> Vec<usize> {
+        self.axis_headers
+            .iter()
+            .map(|axis| axis.tile_size as usize)
+            .collect()
     }
 
     /// Returns the sizes for all axis.
@@ -143,8 +149,8 @@ impl UcsfFile {
         let mut data = [0f32].repeat(total_size);
 
         for tile in self.tiles() {
-            for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos() {
-                let pos = i_axis_1 * (self.axis_data_points(1) as usize) + i_axis_2;
+            for (axis_indices, value) in tile.iter_with_abolute_pos() {
+                let pos = multi_dim_position(&self.axis_sizes(), &axis_indices);
                 data[pos] = value;
             }
         }
@@ -366,18 +372,14 @@ impl AxisHeader {
 }
 
 pub struct Tile<'a> {
-    /// Amount of data points along axis 1 in a full (unpadded) tile.
-    pub normal_axis_1_len: usize,
-    /// Amount of data points along axis 2 in a full (unpadded) tile.
-    pub normal_axis_2_len: usize,
-    /// Amount of data points along axis 1 in this tile.
-    pub axis_1_len: usize,
-    /// Amount of data points along axis 2 in this tile.
-    pub axis_2_len: usize,
+    /// Amount of data points along each axis in this tile.
+    pub axis_lengths: Vec<usize>,
     /// Index of first element of axis 1 (in relation to total axis).
-    pub axis_1_start: usize,
+    // pub axis_1_start: usize,
     /// Index of first element of axis 2 (in relation to total axis).
-    pub axis_2_start: usize,
+    // pub axis_2_start: usize,
+    /// Index of first element of axis 2 (in relation to total axis).
+    pub axis_starts: Vec<usize>,
     /// View into underlying data
     pub data: &'a [f32],
 }
@@ -404,23 +406,82 @@ pub struct AbsolutePosValIter<'a> {
     next_index: usize,
 }
 
+impl<'a> AbsolutePosValIter<'a> {
+    pub fn as_2d(&'a mut self) -> AbsolutePosValIter2D<'a> {
+        AbsolutePosValIter2D { iter: self }
+    }
+
+    pub fn as_3d(&'a mut self) -> AbsolutePosValIter3D<'a> {
+        AbsolutePosValIter3D { iter: self }
+    }
+
+    pub fn as_4d(&'a mut self) -> AbsolutePosValIter4D<'a> {
+        AbsolutePosValIter4D { iter: self }
+    }
+}
+
 impl<'a> Iterator for AbsolutePosValIter<'a> {
-    type Item = ((usize, usize), f32);
+    type Item = (Vec<usize>, f32);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_index >= self.tile.data().len() {
             return None;
         }
 
-        let axis_1_rel = self.next_index / self.tile.axis_2_len;
-        let axis_2_rel = self.next_index % self.tile.axis_2_len;
-
-        let axis_1_abs = axis_1_rel + self.tile.axis_1_start;
-        let axis_2_abs = axis_2_rel + self.tile.axis_2_start;
+        // Position relative to the current tile
+        let axis_rel = multi_dim_index(&self.tile.axis_lengths, self.next_index);
+        // Absolute position
+        let axis_abs: Vec<_> = axis_rel
+            .iter()
+            .zip(&self.tile.axis_starts)
+            .map(|(axis_relative, axis_start)| axis_relative + axis_start)
+            .collect();
 
         let val = self.tile.data()[self.next_index];
         self.next_index += 1;
-        Some(((axis_1_abs, axis_2_abs), val))
+        Some(((axis_abs), val))
+    }
+}
+
+pub struct AbsolutePosValIter2D<'a> {
+    iter: &'a mut AbsolutePosValIter<'a>,
+}
+
+impl<'a> Iterator for AbsolutePosValIter2D<'a> {
+    type Item = ((usize, usize), f32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|(axis_abs, val)| ((axis_abs[0], axis_abs[1]), val))
+    }
+}
+
+pub struct AbsolutePosValIter3D<'a> {
+    iter: &'a mut AbsolutePosValIter<'a>,
+}
+
+impl<'a> Iterator for AbsolutePosValIter3D<'a> {
+    type Item = ((usize, usize, usize), f32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|(axis_abs, val)| ((axis_abs[0], axis_abs[1], axis_abs[2]), val))
+    }
+}
+
+pub struct AbsolutePosValIter4D<'a> {
+    iter: &'a mut AbsolutePosValIter<'a>,
+}
+
+impl<'a> Iterator for AbsolutePosValIter4D<'a> {
+    type Item = ((usize, usize, usize, usize), f32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|(axis_abs, val)| ((axis_abs[0], axis_abs[1], axis_abs[2], axis_abs[3]), val))
     }
 }
 
@@ -442,44 +503,113 @@ impl<'a> Iterator for Tiles<'a> {
     type Item = Tile<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let tiles_axis_1 = self.file.axis_tiles(0) as usize;
-        let tiles_axis_2 = self.file.axis_tiles(1) as usize;
-        let tiles_total = tiles_axis_1 * tiles_axis_2;
+        let tiles_per_axis = self.file.axis_tiles();
+        let tiles_total: usize = tiles_per_axis.iter().product();
         if tiles_total <= self.next_index {
             return None;
         }
 
-        let tile_index_1 = self.next_index / tiles_axis_2;
-        let tile_index_2 = self.next_index % tiles_axis_2;
+        let tile_indices = multi_dim_index(&tiles_per_axis, self.next_index);
 
         // Size of a normal (unpadded) tile
-        let axis_1_len = self.file.axis_tile_size(0) as usize;
-        let axis_2_len = self.file.axis_tile_size(1) as usize;
+        let axis_tile_sizes = self.file.axis_tile_sizes();
         // Size of this tile (without padding)
-        let this_tile_axis_1_len = (self.file.axis_tile_size(0)
-            - self.file.axis_headers[0].tile_padding(tile_index_1))
-            as usize;
-        let this_tile_axis_2_len = (self.file.axis_tile_size(1)
-            - self.file.axis_headers[1].tile_padding(tile_index_2))
-            as usize;
+        let this_tile_axis_lens: Vec<_> = axis_tile_sizes
+            .iter()
+            .zip(&tile_indices)
+            .zip(&self.file.axis_headers)
+            .map(|((tile_size, tile_index), axis_header)| {
+                (*tile_size as u32 - axis_header.tile_padding(*tile_index)) as usize
+            })
+            .collect();
 
-        let axis_1_start = axis_1_len * tile_index_1;
-        let axis_2_start = axis_2_len * tile_index_2;
+        let axis_starts: Vec<_> = axis_tile_sizes
+            .iter()
+            .zip(tile_indices)
+            .map(|(tile_size, tile_index)| tile_size * tile_index)
+            .collect();
 
-        let tile_data_points = this_tile_axis_1_len * this_tile_axis_2_len;
+        let tile_data_points: usize = this_tile_axis_lens.iter().product();
 
         let data_range_start = tile_data_points * self.next_index;
         let data_range_end = data_range_start + tile_data_points;
 
         self.next_index += 1;
         Some(Tile {
-            normal_axis_1_len: axis_1_len,
-            normal_axis_2_len: axis_2_len,
-            axis_1_len: this_tile_axis_1_len,
-            axis_2_len: this_tile_axis_2_len,
-            axis_1_start,
-            axis_2_start,
+            axis_lengths: this_tile_axis_lens,
+            axis_starts,
             data: &self.file.data[data_range_start..data_range_end],
         })
+    }
+}
+
+/// Calculate the position in a flat array from multi-dimension-index and dimension sizes.
+fn multi_dim_position(sizes: &[usize], indices: &[usize]) -> usize {
+    assert!(sizes.len() == indices.len());
+
+    let mut pos = 0;
+    for dim in 0..sizes.len() {
+        let mut subdimensions_size = 0;
+        let subdimensions = sizes.len() - (dim + 1);
+        if subdimensions >= 1 {
+            subdimensions_size = sizes[(sizes.len() - subdimensions)..(sizes.len())]
+                .iter()
+                .product();
+        }
+
+        let dim_index = indices[dim];
+        match subdimensions_size {
+            0 => pos += dim_index,
+            subdimensions_size => pos += dim_index * subdimensions_size,
+        }
+    }
+
+    pos
+}
+
+fn multi_dim_index(sizes: &[usize], pos: usize) -> Vec<usize> {
+    let mut indices = [0usize].repeat(sizes.len());
+    // TODO: implement in generic way
+    match sizes.len() {
+        2 => {
+            indices[0] = pos / sizes[1];
+            indices[1] = pos % sizes[1];
+        }
+        3 => {
+            indices[0] = pos / (sizes[1] * sizes[2]);
+            indices[1] = (pos % (sizes[1] * sizes[2])) / sizes[2];
+            indices[2] = (pos % (sizes[1] * sizes[2])) % sizes[2];
+        }
+        _ => unimplemented!(),
+    }
+
+    indices
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn multi_dim_position() {
+        let f = super::multi_dim_position;
+        assert_eq!(f(&[3, 3], &[1, 0]), 3);
+        assert_eq!(f(&[3, 3], &[1, 1]), 4);
+        assert_eq!(f(&[3, 3], &[1, 2]), 5);
+        assert_eq!(f(&[3, 3], &[2, 0]), 6);
+
+        assert_eq!(f(&[4, 3, 3], &[2, 0, 0]), 18);
+        assert_eq!(f(&[4, 3, 3], &[3, 2, 1]), 34);
+    }
+
+    #[test]
+    fn multi_dim_index() {
+        let f = super::multi_dim_index;
+
+        assert_eq!(f(&[4, 3, 3], 18), vec![2, 0, 0]);
+        assert_eq!(f(&[4, 3, 3], 34), vec![3, 2, 1]);
+
+        assert_eq!(f(&[4, 3, 2], 18), vec![3, 0, 0]);
+        assert_eq!(f(&[4, 3, 2], 19), vec![3, 0, 1]);
+        assert_eq!(f(&[4, 3, 2], 20), vec![3, 1, 0]);
+        assert_eq!(f(&[4, 3, 2], 21), vec![3, 1, 1]);
     }
 }

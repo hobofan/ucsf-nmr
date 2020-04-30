@@ -29,13 +29,14 @@ pub fn main() {
         (min_val, Srgb::<f32>::from_format(WHITE).into_linear()),
         (max_val, Srgb::<f32>::from_format(BLACK).into_linear()),
     ]);
-    for tile in contents.tiles() {
-        for ((i_axis_1, i_axis_2), value) in tile.iter_with_abolute_pos().as_2d() {
-            root.draw_pixel(
-                (i_axis_1 as i32, i_axis_2 as i32),
-                &gradient.get(value).to_rgba(),
-            )
-            .unwrap();
+    let data = contents.data_continous();
+    let dimensions = contents.axis_sizes();
+    for d1 in 0..dimensions[0] {
+        for d2 in 0..dimensions[1] {
+            let pos = d1 * dimensions[1] + d2;
+            let value = data[pos];
+            root.draw_pixel((d1 as i32, d2 as i32), &gradient.get(value).to_rgba())
+                .unwrap();
         }
     }
 }

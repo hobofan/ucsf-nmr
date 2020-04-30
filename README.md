@@ -13,7 +13,7 @@
 
 <br/>
 
-This project provides a parser for the UCSF NMR file format written in Rust.
+This project provides a parser for the UCSF NMR file format written in Rust. It explicitly supports 2D/3D/4D measurements, but should in theory support any number of dimensions.
 
 The implemenation follows the description of the format outlined at
 <https://www.cgl.ucsf.edu/home/sparky/manual/files.html#UCSFFormat>.

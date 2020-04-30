@@ -104,6 +104,6 @@ fn correct_tile_sizes() {
     let contents = include_bytes!("./data/Nhsqc_highres_600MHz.ucsf");
 
     let (_, file) = UcsfFile::parse(&contents[..]).expect("Failed parsing");
-    assert_eq!(file.axis_tile_size(0), 128);
-    assert_eq!(file.axis_tile_size(1), 64);
+    assert_eq!(file.axis_tile_sizes()[0], 128);
+    assert_eq!(file.axis_tile_sizes()[1], 64);
 }
